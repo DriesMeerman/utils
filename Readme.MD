@@ -6,7 +6,7 @@ Installation assumes you are using zsh, if different modify script first.
 
 ```bash
 brew install fzf
-echo 'export PATH="$(pwd)/scripts:\$PATH"' >> ~/.zshrc
+echo 'export PATH="$(pwd)/scripts:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
