@@ -1,6 +1,14 @@
 # This Repository contains a bunch of small CLI tools
 Currently this is written for Macos so some tools might depend on things like the `open` command.
 
+# Instalation
+Installation assumes you are using zsh, if different modify script first.
+
+```bash
+brew install fzf
+echo 'export PATH="$(pwd)/scripts:\$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
 
 # Tools
 ## `fzurl` - A Fuzzy Search URL Opener
