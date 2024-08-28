@@ -1,0 +1,149 @@
+#!/bin/bash
+
+fzurl() {
+
+RUNNER=open;
+
+# Default environment variables
+URL_LIST=${URL_LIST:-~/default_urls.csv}
+CSV_FILE=${CSV_FILE:-~/default_arguments.csv}
+
+
+local url_file="$URL_LIST"
+local csv_file="$CSV_FILE"
+local replacement_arg=""
+local create_defaults=false
+
+print_help() {
+    echo "fzurl - A script to open URLs where you can fuzzy search for the arguments to replace."
+    echo "Usage: fz [OPTIONS] [REPLACEMENT_ARG]"
+    echo ""
+    echo "Options:"
+    echo "  --RUNNER=EXECUTABLE      Specify a program to use the pass the URLs to."
+    echo "  --url=URL                Specify a single URL to use."
+    echo "  --urlsfile=FILE          Specify a file containing a list of URLs."
+    echo "  --argsfile=FILE          Specify a CSV file containing name, argument pairs."
+    echo "  --create-defaults        Create default URL and CSV files if they do not exist."
+    echo "  --help                   Display this help message."
+    echo ""
+    echo "REPLACEMENT_ARG:"
+    echo "  A single argument to replace %s in the URLs."
+    echo ""
+    echo "Examples:"
+    echo "  fz --url=https://example.com/search?q=%s argument"
+    echo "  fz --urlsfile=urls.txt --argsfile=args.csv"
+    echo "  fz --create-defaults"
+    echo "  fz --runner=echo"
+    echo ""
+    echo "Config files can be found:"
+    echo "$URL_LIST"
+    echo "$CSV_FILE"
+}
+
+# Parse command-line arguments
+for arg in "$@"; do
+    case $arg in
+        -h)
+            print_help
+            return 0
+            ;;
+        --help)
+            print_help
+            return 0
+            ;;
+        --runner=*)
+            RUNNER="${arg#*=}"
+            shift
+            ;;
+        --url=*)
+            url="${arg#*=}"
+            shift
+            ;;
+        --urlsfile=*)
+            url_file="${arg#*=}"
+            shift
+            ;;
+        --argsfile=*)
+            csv_file="${arg#*=}"
+            shift
+            ;;
+        --create-defaults)
+            create_defaults=true
+            shift
+            ;;
+        *)
+            replacement_arg="$arg"
+            ;;
+    esac
+done
+
+# Create default files if --create-defaults is passed
+if $create_defaults; then
+    if [[ ! -f "$URL_LIST" ]]; then
+        echo "tags,argument" > "$URL_LIST"
+        echo "Google Search,https://www.google.com/search?q=%s" >> "$URL_LIST"
+        echo "DuckDuckGo Search,https://duckduckgo.com/?q=%s" >> "$URL_LIST"
+        echo "Default URL file created\n\t $URL_LIST"
+    fi
+    if [[ ! -f "$CSV_FILE" ]]; then
+        echo "tags,argument" > "$CSV_FILE"
+        echo "Default CSV file created\n\t $CSV_FILE"
+    fi
+    return 0
+fi
+
+# Check if URL file exists and no url argument is provided
+if [[ ! -f "$url_file" ]] && [[ -z "$url" ]]; then
+    echo "URL file '$url_file' not found!"
+    return 1
+fi
+
+
+# Check if CSV file exists (only if not using a direct argument)
+if [[ -z "$replacement_arg" ]] && [[ ! -f "$csv_file" ]]; then
+    echo "CSV file '$csv_file' not found!"
+    return 1
+fi
+
+# Use fzf to select multiple URLs from the provided file or default to the value of the --url argument
+local urls=""
+if [[ -z "$url" ]]; then
+    urls=$(cat "$url_file" | fzf --multi --reverse | awk -F, '{print $2}')
+    if [[ -z "$urls" ]]; then
+        echo "No URL selected!"
+        return 1
+    fi
+else
+    urls="$url"
+fi
+
+
+# Use fzf to select multiple name, argument pairs from the CSV file
+local args=""
+
+if [[ -z "$replacement_arg" ]]; then
+    args=$(cat "$csv_file" | fzf --multi --reverse | awk -F, '{print $2}')
+else
+    args="$replacement_arg"
+fi
+
+if [[ -z "$args" ]]; then
+    echo "No argument selected!"
+    return 1
+fi
+
+# Generate combinations of URLs and arguments
+while IFS= read -r url; do
+    while IFS= read -r arg; do
+        if [[ "$url" == *"%s"* ]]; then
+            local replaced_url=$(echo "$url" | awk -v replacement="$arg" '{gsub(/%s/, replacement); print}')
+            $RUNNER "$replaced_url"
+        else
+            $RUNNER "$url"
+        fi
+    done <<< "$args"
+done <<< "$urls"
+
+}
+
+fzurl "$@"
