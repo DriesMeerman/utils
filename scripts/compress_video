@@ -1,0 +1,103 @@
+#!/bin/bash
+
+export VIDEO_DIRS="$HOME/Desktop:$HOME/Desktop/screenshots"
+export OUTPUT_DIR="$HOME/Desktop/compressed"
+
+# Add the following function to your ~/.zshrc file
+compress_latest_video() {
+    # Set DEBUG=1 to enable debug logging, DEBUG=0 to disable
+    DEBUG=0
+
+    # Use VIDEO_DIRS env var or default to ~/Desktop/screenshots
+    VIDEO_DIRS=${VIDEO_DIRS:-"$HOME/Desktop/screenshots"}
+
+    # Use OUTPUT_DIR env var or default to ~/Desktop/compressed
+    OUTPUT_DIR=${OUTPUT_DIR:-"$HOME/Desktop/compressed"}
+    mkdir -p "$OUTPUT_DIR"
+
+    # Split VIDEO_DIRS into an array of directories
+    IFS=':' read -r -A dirs <<< "$VIDEO_DIRS"
+
+    # Initialize variables to store the latest file and its modification time
+    latest_video=""
+    latest_mtime=0
+
+    # Iterate over directories to find the latest video file
+    for dir in "${dirs[@]}"; do
+        if [ -d "$dir" ]; then
+            [ "$DEBUG" -eq 1 ] && echo "Searching in directory: $dir"
+
+           
+
+            # List .mov and .mp4 files directly under the directory
+            files=()
+            for ext in mov mp4; do
+                for file in "$dir"/*."$ext"; do
+
+                    # Skip file if its in the output directory
+                    if [[ "$file" == "$OUTPUT_DIR/"* ]]; then
+                       [ "$DEBUG" -eq 1 ] && echo "Skipping file in output directory: $file"
+                       continue
+                    fi
+
+                    if [ -f "$file" ]; then
+                        # Exclude files that contain _compressed in their name
+                        if [[ "$file" == *"_compressed"* ]]; then
+                            [ "$DEBUG" -eq 1 ] && echo "Skipping compressed file: $file"
+                            continue
+                        fi
+
+                        # Exclude files in OUTPUT_DIR
+                        if [[ "$file" == "$OUTPUT_DIR/"* ]]; then
+                            [ "$DEBUG" -eq 1 ] && echo "Skipping file in output directory: $file"
+                            continue
+                        fi
+                        files+=("$file")
+                    fi
+                done
+            done
+
+            if [ ${#files[@]} -gt 0 ]; then
+                for file in "${files[@]}"; do
+                    # Get the modification time of the file
+                    mtime=$(stat -f "%m" "$file")
+                    [ "$DEBUG" -eq 1 ] && echo "File: $file, mtime: $mtime"
+                    if [ "$mtime" -gt "$latest_mtime" ]; then
+                        latest_mtime="$mtime"
+                        latest_video="$file"
+                        [ "$DEBUG" -eq 1 ] &&  echo "Latest video updated to: $latest_video"
+                    fi
+                done
+            else
+                [ "$DEBUG" -eq 1 ] && echo "No video files found in $dir"
+            fi
+        else
+            [ "$DEBUG" -eq 1 ] && echo "Directory does not exist: $dir"
+        fi
+    done
+
+    # Check if any video files were found
+    if [ -z "$latest_video" ]; then
+        echo "No video files found in specified directories."
+        return 1
+    fi
+
+    
+    # Extract filename and basename
+    filename=$(basename "$latest_video")
+    basename="${filename%.*}"
+
+    # Construct the output filename with _compressed postfix
+    output="${OUTPUT_DIR}/${basename}_compressed.mp4"
+    
+    # Check if the output file already exists
+    if [ -f "$output" ]; then
+        echo "Output file already exists: $output [$(du -h "$output" | cut -f1)]"
+        return 1
+    fi
+
+    # Run ffmpeg to compress the video
+    ffmpeg -i "$latest_video" -vcodec libx264 -crf 28 "$output"
+    echo "\n\nLatest Video -> $latest_video [$(du -h "$latest_video" | cut -f1)]"
+    echo "Output -> $output [$(du -h "$output" | cut -f1)]\n\n"
+}
